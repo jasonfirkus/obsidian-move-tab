@@ -1,114 +1,92 @@
-import {
-	Editor,
-	MarkdownView,
-	MarkdownFileInfo,
-	Modal,
-	Notice,
-	Plugin,
-} from 'obsidian';
-import {
-	DEFAULT_SETTINGS,
-	MyPluginSettings,
-	SampleSettingTab,
-} from './settings';
+import { Plugin, WorkspaceLeaf, WorkspaceSplit, WorkspaceTabs } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
+type TabGroup = WorkspaceTabs & {
+	children: WorkspaceLeaf[];
+	removeChild(leaf: WorkspaceLeaf): void;
+	insertChild(index: number, leaf: WorkspaceLeaf): void;
+	selectTab(leaf: WorkspaceLeaf): void;
+};
 
-export default class MyPlugin extends Plugin {
-	settings!: MyPluginSettings;
+type TabGroupParent = WorkspaceSplit & {
+	children: unknown[];
+};
 
+export default class MoveTab extends Plugin {
 	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			},
+			id: 'move-tab-left',
+			name: 'Left',
+			callback: () => this.moveTab(-1),
+			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'PageUp' }],
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
+
 		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (
-				editor: Editor,
-				_ctx: MarkdownView | MarkdownFileInfo,
-			) => {
-				editor.replaceSelection('Sample editor command');
-			},
+			id: 'move-tab-right',
+			name: 'Right',
+			callback: () => this.moveTab(1),
+			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'PageDown' }],
 		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView =
-					this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+	}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			},
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(activeDocument, 'click', (_evt: MouseEvent) => {
-			new Notice('Click');
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(
-			window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000),
+	async moveTab(direction: -1 | 1) {
+		const leaf = this.app.workspace.getMostRecentLeaf(
+			this.app.workspace.rootSplit,
 		);
+		if (!leaf) return;
+
+		if (!(leaf.parent instanceof WorkspaceTabs)) return;
+		const group = leaf.parent as TabGroup;
+		if (!Array.isArray(group.children)) return;
+
+		const index = group.children.indexOf(leaf);
+		if (index === -1) return;
+
+		const target = group.children[index + direction];
+		if (!target) {
+			this.moveTabToAdjacentGroup(leaf, group, direction);
+			return;
+		}
+
+		// avoid flashing due to race conditions
+		const sourceState = { ...leaf.getViewState(), active: false };
+		const targetState = { ...target.getViewState(), active: false };
+
+		await target.setViewState(sourceState);
+		this.app.workspace.setActiveLeaf(target, { focus: true });
+		await leaf.setViewState(targetState);
 	}
 
-	onunload() {}
+	moveTabToAdjacentGroup(
+		leaf: WorkspaceLeaf,
+		sourceGroup: TabGroup,
+		direction: -1 | 1,
+	) {
+		const parent = sourceGroup.parent as TabGroupParent;
+		if (!Array.isArray(parent.children)) return;
 
-	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MyPluginSettings>,
+		const groupIndex = parent.children.indexOf(sourceGroup);
+		const adjacentGroup = parent.children[groupIndex + direction];
+		if (!(adjacentGroup instanceof WorkspaceTabs)) return;
+
+		const targetGroup = adjacentGroup as TabGroup;
+		if (
+			!Array.isArray(targetGroup.children) ||
+			typeof sourceGroup.removeChild !== 'function' ||
+			typeof targetGroup.insertChild !== 'function'
+		)
+			return;
+
+		sourceGroup.removeChild(leaf);
+		targetGroup.insertChild(
+			direction === -1 ? targetGroup.children.length : 0,
+			leaf,
 		);
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
+		targetGroup.selectTab(leaf);
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		(
+			this.app.workspace as typeof this.app.workspace & {
+				requestResize?: () => void;
+			}
+		).requestResize?.();
 	}
 }
