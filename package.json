@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-move-tab",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Move tab plugin for obsidian",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
