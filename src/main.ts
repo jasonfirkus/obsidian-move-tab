@@ -14,14 +14,14 @@ type TabGroupParent = WorkspaceSplit & {
 export default class MoveTab extends Plugin {
 	async onload() {
 		this.addCommand({
-			id: 'move-tab-left',
+			id: 'left',
 			name: 'Left',
 			callback: () => this.moveTab(-1),
 			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'PageUp' }],
 		});
 
 		this.addCommand({
-			id: 'move-tab-right',
+			id: 'right',
 			name: 'Right',
 			callback: () => this.moveTab(1),
 			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'PageDown' }],

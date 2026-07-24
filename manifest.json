@@ -1,7 +1,7 @@
 {
 	"id": "move-tab",
 	"name": "Move Tab",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.12.7",
 	"description": "Adds commands for moving the active tab left or right. Works across tab groups.",
 	"author": "Jason Firkus",

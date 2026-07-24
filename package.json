@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-move-tab",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Move tab plugin for obsidian",
 	"main": "main.js",
 	"type": "module",
